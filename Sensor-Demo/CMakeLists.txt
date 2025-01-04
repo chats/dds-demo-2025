@@ -11,9 +11,9 @@ endif()
 idlc_generate(TARGET SensorData_lib FILES idl/SensorData.idl WARNINGS no-implicit-extensibility)
 
 # Publisher executable
-add_executable(SensorDemoPublisher src/opt/publisher.c)
+add_executable(SensorDemoPublisher src/publisher.c)
 target_link_libraries(SensorDemoPublisher CycloneDDS::ddsc SensorData_lib)
 
 # Subscriber executable
-add_executable(SensorDemoSubscriber src/opt/subscriber.c)
+add_executable(SensorDemoSubscriber src/subscriber.c)
 target_link_libraries(SensorDemoSubscriber CycloneDDS::ddsc SensorData_lib)

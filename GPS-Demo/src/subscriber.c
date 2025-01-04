@@ -1,5 +1,5 @@
 #include "dds/dds.h"
-#include "SensorData.h"
+#include "VehicleGPS.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,13 +8,15 @@
 
 static dds_entity_t participant, topic, reader;
 static dds_return_t rc;
-static SensorData_Reading *msg;
-static void *samples[MAX_SAMPLES] = {NULL};
-static dds_sample_info_t infos[MAX_SAMPLES];
-static char filter_device_id[DEVICE_ID_LEN] = {0};
 static bool filtering = false;
 static dds_domainid_t domain_id = DOMAIN_ID;
 static const char *topic_name = TOPIC_NAME;
+
+static VehicleGPS_Location *msg;
+static void *samples[MAX_SAMPLES];
+static dds_sample_info_t infos[MAX_SAMPLES];
+
+static char *filter_vehicle_id = NULL;
 
 static volatile bool running = true;
 
@@ -29,9 +31,9 @@ static void print_usage(const char *program) {
     printf("Usage: %s [options]\n", program);
     printf("Options:\n");
     printf("  -h            Show this help message\n");
-    printf("  -s device_id  Filter by device ID (default: receive all)\n");
     printf("  -d domain_id  Set DDS domain ID (default: 0)\n");
     printf("  -t topic      Set topic name (default: SensorTopic)\n");
+    printf("  -s vehicle_id Filter by vehicle ID (default: receive all)\n");
 }
 
 void config(int argc, char *argv[]) {
@@ -51,10 +53,8 @@ void config(int argc, char *argv[]) {
                 }
                 break;            
             case 's': 
-                if (++i < argc) {
-                    strncpy(filter_device_id, argv[i], DEVICE_ID_LEN-1);
-                    filter_device_id[DEVICE_ID_LEN-1] = '\0';
-                    filtering = true;
+                if (i < argc) {
+                    filter_vehicle_id = argv[++i];
                 }
                 break;
         }
@@ -63,23 +63,23 @@ void config(int argc, char *argv[]) {
 
 int setup() {
     if ((participant = dds_create_participant(domain_id, NULL, NULL)) < 0 ||
-        (topic = dds_create_topic(participant, &SensorData_Reading_desc, topic_name, NULL, NULL)) < 0 ||
+        (topic = dds_create_topic(participant, &VehicleGPS_Location_desc, topic_name, NULL, NULL)) < 0 ||
         (reader = dds_create_reader(participant, topic, NULL, NULL)) < 0) {
         fprintf(stderr, "Error initializing DDS: %s\n", dds_strretcode(-reader));
         return 1;
     }
 
-    samples[0] = SensorData_Reading__alloc();
+    samples[0] = VehicleGPS_Location__alloc();
 
     if (filtering) {
-        printf("Filtering for device: %s\n", filter_device_id);
+        printf("Filtering for vehicle: %s\n", filter_vehicle_id);
     }
     return 0;
 }
 
 
 int main(int argc, char *argv[]) {
-
+  
     config(argc, argv);
     
     signal(SIGINT, signal_handler);
@@ -92,18 +92,20 @@ int main(int argc, char *argv[]) {
 
     while (running) {
         rc = dds_take(reader, samples, infos, MAX_SAMPLES, MAX_SAMPLES);
-        if (rc > 0 && infos[0].valid_data) {
+        if (rc > 0) {
             msg = samples[0];
-            if (!filtering || strcmp(msg->device_id, filter_device_id) == 0) {
-                printf("Received: %s, T=%.1f, H=%.1f\n",
-                       msg->device_id, msg->temperature, msg->humidity);
+            if (infos[0].valid_data) {
+                if (!filter_vehicle_id || strcmp(msg->vehicle_id, filter_vehicle_id) == 0) {
+                    printf("Received: Vehicle=%s, Location=(%.8f, %.8f)\n",
+                           msg->vehicle_id, msg->latitude, msg->longitude);
+                }
             }
         }
         dds_sleepfor(DDS_MSECS(100));
     }
 
     printf("Cleaning up DDS entities...\n");
-    SensorData_Reading_free(samples[0], DDS_FREE_ALL);
+    VehicleGPS_Location_free(samples[0], DDS_FREE_ALL);
     dds_delete(participant);
     
     return 0;

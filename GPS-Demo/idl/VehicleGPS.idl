@@ -1,0 +1,10 @@
+module VehicleGPS {
+    struct Location {
+        @key
+        string vehicle_id;
+        double latitude;
+        double longitude;
+        string location_name;
+        long timestamp;
+    };
+};

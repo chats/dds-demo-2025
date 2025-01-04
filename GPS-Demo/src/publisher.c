@@ -1,5 +1,5 @@
 #include "dds/dds.h"
-#include "SensorData.h"
+#include "VehicleGPS.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,24 +7,17 @@
 #include <signal.h>
 
 #include "config.h"
-
-typedef struct {
-    char id[DEVICE_ID_LEN];
-    double current_temp;
-} Sensor;
+#include "gps_data.h"
 
 static dds_domainid_t domain_id = DOMAIN_ID;
 static const char *topic_name = TOPIC_NAME;
-
-static Sensor sensors[MAX_SENSORS];
-static size_t sensor_count = 0;
-static const double HUMIDITY_FACTOR = 0.7;
-
-static bool verbose = false;
 static dds_entity_t participant, topic, writer;
 static dds_return_t rc;
-static SensorData_Reading msg = {0};
 
+static char *vehicle_id = DEFAULT_VEHICLE_ID;
+static VehicleGPS_Location msg;
+
+static bool verbose = false;
 static volatile bool running = true;
 
 static void signal_handler(int sig) {
@@ -34,6 +27,7 @@ static void signal_handler(int sig) {
     }
 }
 
+/*
 static inline double get_next_temperature(const double current_temp) {
     const double change = (((double)rand() / RAND_MAX) * 2 - 1) * MAX_TEMP_CHANGE;
     double new_temp = current_temp + change;
@@ -43,15 +37,16 @@ static inline double get_next_temperature(const double current_temp) {
 static inline double calculate_humidity(const double temperature) {
     return (temperature / HUMIDITY_FACTOR) + (((double)rand() / RAND_MAX) * 4.0 - 2.0);
 }
+*/
 
 static void print_usage(const char *program) {
     printf("Usage: %s [options]\n", program);
     printf("Options:\n");
     printf("  -h            Show this help message\n");
     printf("  -v            Enable verbose output\n");
-    printf("  -s device_id  Set device ID (default: sensor-001)\n");
     printf("  -d domain_id  Set DDS domain ID (default: 0)\n");
     printf("  -t topic      Set topic name (default: SensorTopic)\n");
+    printf("  -s vehicle_id Set vehicle ID (default: vehicle-001)\n");
 }
 
 void config(int argc, char *argv[]) {
@@ -70,29 +65,21 @@ void config(int argc, char *argv[]) {
                 if (i < argc ) {
                     topic_name = argv[++i];
                 }
-                break;            
+                break;      
             case 's': 
-                if (++i < argc && sensor_count < MAX_SENSORS) {
-                    strncpy(sensors[sensor_count].id, argv[i], DEVICE_ID_LEN-1);
-                    sensors[sensor_count].id[DEVICE_ID_LEN-1] = '\0';
-                    sensors[sensor_count++].current_temp = 25.0;
+                if (i < argc ) {
+                    vehicle_id = argv[++i];
                 }
-                break;
+                break;            
         }
     }
 }
 
 int setup() {
-    if (!sensor_count) {
-        strcpy(sensors[0].id, "sensor-001");
-        sensors[0].current_temp = 25.0;
-        sensor_count = 1;
-    }
-
-    srand(time(NULL));
+//    srand(time(NULL));
 
     if ((participant = dds_create_participant(domain_id, NULL, NULL)) < 0 ||
-        (topic = dds_create_topic(participant, &SensorData_Reading_desc, topic_name, NULL, NULL)) < 0 ||
+        (topic = dds_create_topic(participant, &VehicleGPS_Location_desc, topic_name, NULL, NULL)) < 0 ||
         (writer = dds_create_writer(participant, topic, NULL, NULL)) < 0) {
         fprintf(stderr, "Error initializing DDS: %s\n", dds_strretcode(-writer));
         return 1;
@@ -113,21 +100,32 @@ int main(int argc, char *argv[]) {
 
     printf("Publisher running, Domain: %d, Topic=%s, press Ctrl-C to stop...\n", domain_id, topic_name);
 
-    while (running) {
-        for (size_t i = 0; i < sensor_count; i++) {
-            sensors[i].current_temp = get_next_temperature(sensors[i].current_temp);
-            msg.device_id = sensors[i].id;
-            msg.temperature = sensors[i].current_temp;
-            msg.humidity = calculate_humidity(sensors[i].current_temp);
-            msg.timestamp = time(NULL);
+    size_t current_point = 0;
 
-            if ((rc = dds_write(writer, &msg)) != DDS_RETCODE_OK) {
-                fprintf(stderr, "Error: %s\n", dds_strretcode(-rc));
-            } else if (verbose) {
-                printf("Published: %s, T=%.1f, H=%.1f\n",
-                       msg.device_id, msg.temperature, msg.humidity);
-            }
+    while (running) {
+        msg.vehicle_id = vehicle_id;
+        msg.latitude = gps_waypoints[current_point].latitude;
+        msg.longitude = gps_waypoints[current_point].longitude;
+        //msg.location_name = (char *)gps_waypoints[current_point].location;
+        msg.timestamp = (long)time(NULL);
+
+        rc = dds_write(writer, &msg);
+        if (rc != DDS_RETCODE_OK) {
+            printf("Error writing: %s\n", dds_strretcode(-rc));
+        } else if (verbose) {
+            printf("Published: Vehicle=%s, Location=(%.8f, %.8f)\n",
+                   msg.vehicle_id, msg.latitude, msg.longitude);
         }
+
+        // Move to next point, loop back to start if at end
+        current_point = (current_point + 1) % NUM_WAYPOINTS;
+
+        if (current_point + 1 >= NUM_WAYPOINTS || current_point == 0) {
+            printf("Reached end of path, resting...\n");
+            dds_sleepfor(DDS_SECS(30));
+        }
+
+
         dds_sleepfor(DDS_SECS(1));
     }
 

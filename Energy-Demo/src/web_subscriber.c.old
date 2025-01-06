@@ -22,22 +22,18 @@ static void signal_handler(int sig) {
     }
 }
 
-static char* create_json_array(PowerPlant_EnergyData *data, size_t count) {
-    json_t *array = json_array();
+static char* create_json_message(PowerPlant_EnergyData *data) {
+    json_t *root = json_object();
     
-    for (size_t i = 0; i < count; i++) {
-        json_t *plant = json_object();
-        json_object_set_new(plant, "plant_id", json_string(data[i].plant_id));
-        json_object_set_new(plant, "type", 
-            json_string(data[i].type == PowerPlant_WIND ? "WIND" : "SOLAR"));
-        json_object_set_new(plant, "location", json_string(data[i].location.name));
-        json_object_set_new(plant, "power", json_real(data[i].power_output));
-        json_object_set_new(plant, "energy", json_real(data[i].daily_energy));
-        json_array_append_new(array, plant);
-    }
+    json_object_set_new(root, "plant_id", json_string(data->plant_id));
+    json_object_set_new(root, "type", 
+        json_string(data->type == PowerPlant_WIND ? "WIND" : "SOLAR"));
+    json_object_set_new(root, "location", json_string(data->location.name));
+    json_object_set_new(root, "power", json_real(data->power_output));
+    json_object_set_new(root, "energy", json_real(data->daily_energy));
     
-    char *json_str = json_dumps(array, JSON_COMPACT);
-    json_decref(array);
+    char *json_str = json_dumps(root, JSON_COMPACT);
+    json_decref(root);
     return json_str;
 }
 
@@ -46,9 +42,9 @@ static int callback_energy_data(struct lws *wsi, enum lws_callback_reasons reaso
     switch (reason) {
         case LWS_CALLBACK_SERVER_WRITEABLE:
             if (valid_count > 0) {
-                char *json_str = create_json_array(dashboard_data, valid_count);
+                char *json_str = create_json_message(&dashboard_data[0]);
                 if (json_str) {
-                    unsigned char buf[LWS_PRE + 16384];  // Increased buffer size
+                    unsigned char buf[LWS_PRE + 4096];
                     size_t json_len = strlen(json_str);
                     memcpy(&buf[LWS_PRE], json_str, json_len);
                     lws_write(wsi, &buf[LWS_PRE], json_len, LWS_WRITE_TEXT);
@@ -67,7 +63,7 @@ static struct lws_protocols protocols[] = {
         "energy-data",
         callback_energy_data,
         0,
-        16384,  // Increased rx buffer size
+        4096,
     },
     { NULL, NULL, 0, 0 }
 };
@@ -75,6 +71,7 @@ static struct lws_protocols protocols[] = {
 int main(int argc, char *argv[]) {
     signal(SIGINT, signal_handler);
     
+    // DDS Setup
     dds_entity_t participant;
     dds_entity_t topic;
     dds_entity_t reader;
@@ -91,6 +88,7 @@ int main(int argc, char *argv[]) {
         samples[i] = PowerPlant_EnergyData__alloc();
     }
 
+    // WebSocket Setup
     struct lws_context_creation_info info;
     memset(&info, 0, sizeof info);
     info.port = WEBSOCKET_PORT;

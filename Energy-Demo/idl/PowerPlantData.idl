@@ -1,0 +1,24 @@
+module PowerPlant {
+    struct Location {
+        @key
+        string<128> name;
+        double latitude;
+        double longitude;
+    };
+
+    enum PlantType {
+        WIND,
+        SOLAR
+    };
+
+    struct EnergyData {
+        @key
+        string<32> plant_id;
+        PlantType type;
+        Location location;
+        double power_output;    // Current power output (kW)
+        double daily_energy;    // Total energy today (kWh)
+        double temperature;     // Equipment temperature (°C)
+        long timestamp;
+    };
+};

@@ -1,0 +1,22 @@
+cmake_minimum_required(VERSION 3.10)
+project(EnergyDemo C)
+
+# Find required packages
+find_package(CycloneDDS REQUIRED)
+find_package(websockets REQUIRED)
+find_package(Jansson REQUIRED)
+
+# Generate code from IDL
+idlc_generate(TARGET PowerPlantData_lib FILES idl/PowerPlantData.idl WARNINGS no-implicit-extensibility)
+
+# Publisher executable
+add_executable(EnergyDemoPublisher src/publisher.c)
+target_link_libraries(EnergyDemoPublisher CycloneDDS::ddsc PowerPlantData_lib)
+
+# Subscriber executable
+add_executable(EnergyDemoSubscriber src/subscriber.c)
+target_link_libraries(EnergyDemoSubscriber CycloneDDS::ddsc PowerPlantData_lib)
+
+# Subscriber executable
+add_executable(EnergyDemoWebSubscriber src/web_subscriber.c)
+target_link_libraries(EnergyDemoWebSubscriber CycloneDDS::ddsc PowerPlantData_lib websockets jansson)

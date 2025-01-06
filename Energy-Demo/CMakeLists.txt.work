@@ -1,0 +1,33 @@
+cmake_minimum_required(VERSION 3.10)
+project(EnergyDemo C)
+
+find_package(CycloneDDS REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBWEBSOCKETS REQUIRED libwebsockets)
+pkg_check_modules(JANSSON REQUIRED jansson)
+
+# Find OpenSSL
+find_package(OpenSSL REQUIRED)
+
+# Generate code from IDL
+idlc_generate(TARGET PowerPlantData_lib FILES idl/PowerPlantData.idl)
+
+add_executable(publisher src/publisher.c)
+target_link_libraries(publisher CycloneDDS::ddsc PowerPlantData_lib)
+
+add_executable(subscriber src/subscriber.c)
+target_link_libraries(subscriber CycloneDDS::ddsc PowerPlantData_lib)
+
+add_executable(web_subscriber src/web_subscriber.c)
+target_include_directories(web_subscriber PRIVATE 
+    ${LIBWEBSOCKETS_INCLUDE_DIRS}
+    ${JANSSON_INCLUDE_DIRS}
+    ${OPENSSL_INCLUDE_DIR}
+)
+target_link_libraries(web_subscriber 
+    CycloneDDS::ddsc 
+    PowerPlantData_lib 
+    ${LIBWEBSOCKETS_LIBRARIES}
+    ${JANSSON_LIBRARIES}
+    ${OPENSSL_LIBRARIES}
+)

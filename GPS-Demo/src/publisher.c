@@ -17,6 +17,12 @@ static dds_return_t rc;
 static char *vehicle_id = DEFAULT_VEHICLE_ID;
 static VehicleGPS_Location msg;
 
+static double start_lat = 13.913762006418807;
+static double start_lon = 100.6045283064237;
+static double end_lat = 16.465591672108264;
+static double end_lon = 102.78304626323816;
+static int num_points = 80;
+
 static bool verbose = false;
 static volatile bool running = true;
 
@@ -27,18 +33,6 @@ static void signal_handler(int sig) {
     }
 }
 
-/*
-static inline double get_next_temperature(const double current_temp) {
-    const double change = (((double)rand() / RAND_MAX) * 2 - 1) * MAX_TEMP_CHANGE;
-    double new_temp = current_temp + change;
-    return new_temp < MIN_TEMP ? MIN_TEMP : (new_temp > MAX_TEMP ? MAX_TEMP : new_temp);
-}
-
-static inline double calculate_humidity(const double temperature) {
-    return (temperature / HUMIDITY_FACTOR) + (((double)rand() / RAND_MAX) * 4.0 - 2.0);
-}
-*/
-
 static void print_usage(const char *program) {
     printf("Usage: %s [options]\n", program);
     printf("Options:\n");
@@ -46,7 +40,10 @@ static void print_usage(const char *program) {
     printf("  -v            Enable verbose output\n");
     printf("  -d domain_id  Set DDS domain ID (default: 0)\n");
     printf("  -t topic      Set topic name (default: SensorTopic)\n");
-    printf("  -s vehicle_id Set vehicle ID (default: vehicle-001)\n");
+    printf("  -i vehicle_id Set vehicle ID (default: vehicle-001)\n");
+    printf("  -s lat,lon        Set start point (default: 13.913762006418807,100.6045283064237)\n");
+    printf("  -e lat,lon        Set end point (default: 16.465591672108264,102.78304626323816)\n");
+    printf("  -n num_points     Set number of points (default: 10)\n");
 }
 
 void config(int argc, char *argv[]) {
@@ -56,21 +53,24 @@ void config(int argc, char *argv[]) {
             case 'h': print_usage(argv[0]); exit(0);
             case 'v': verbose = true; break;
             case 'd': 
-                if (i < argc ) {
-                    domain_id = atoi(argv[++i]);
-
-                }
+                if (i < argc ) { domain_id = atoi(argv[++i]);  }
                 break;
             case 't': 
-                if (i < argc ) {
-                    topic_name = argv[++i];
-                }
+                if (i < argc ) { topic_name = argv[++i]; }
                 break;      
+            case 'i': 
+                if (i < argc ) { vehicle_id = argv[++i]; }
+                break;
             case 's': 
-                if (i < argc ) {
-                    vehicle_id = argv[++i];
-                }
-                break;            
+                if (i < argc ) { sscanf(argv[++i], "%lf,%lf", &start_lat, &start_lon); }
+                break;              
+            case 'e': 
+                if (i < argc ) { sscanf(argv[++i], "%lf,%lf", &end_lat, &end_lon); }
+                break;      
+            case 'n': 
+                if (i < argc ) { num_points = atoi(argv[++i]); }
+                break;      
+
         }
     }
 }
@@ -88,6 +88,19 @@ int setup() {
     return 0;
 }
 
+GPSPoint* waypoint_generator() {
+    GPSPoint *points = (GPSPoint *)malloc(num_points * sizeof(GPSPoint));
+
+    for (int i = 0; i < num_points; i++) {
+        double t = i / (double)(num_points - 1);
+        points[i].latitude = start_lat + (end_lat - start_lat) * t;
+        points[i].longitude = start_lon + (end_lon - start_lon) * t;
+    }
+
+    return points;
+}
+
+
 int main(int argc, char *argv[]) {
     
     config(argc, argv);
@@ -98,14 +111,19 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    GPSPoint *waypoints = waypoint_generator();
+
     printf("Publisher running, Domain: %d, Topic=%s, press Ctrl-C to stop...\n", domain_id, topic_name);
 
     size_t current_point = 0;
+    bool return_to_start = false;
 
     while (running) {
         msg.vehicle_id = vehicle_id;
-        msg.latitude = gps_waypoints[current_point].latitude;
-        msg.longitude = gps_waypoints[current_point].longitude;
+        //msg.latitude = gps_waypoints[current_point].latitude;
+        msg.latitude = waypoints[current_point].latitude;
+        //msg.longitude = gps_waypoints[current_point].longitude;
+        msg.longitude = waypoints[current_point].longitude;
         //msg.location_name = (char *)gps_waypoints[current_point].location;
         msg.timestamp = (long)time(NULL);
 
@@ -118,18 +136,36 @@ int main(int argc, char *argv[]) {
         }
 
         // Move to next point, loop back to start if at end
-        current_point = (current_point + 1) % NUM_WAYPOINTS;
-
-        if (current_point + 1 >= NUM_WAYPOINTS || current_point == 0) {
+        //current_point = (current_point + 1) % NUM_WAYPOINTS;
+        if (current_point + 1 >= num_points) {
+            return_to_start = true;
             printf("Reached end of path, resting...\n");
-            dds_sleepfor(DDS_SECS(30));
+            dds_sleepfor(DDS_SECS(10));
+        }
+        if (current_point == 0) {
+            printf("Reached start of path, resting...\n");
+            dds_sleepfor(DDS_SECS(10));
+            return_to_start = false;
         }
 
+        if (return_to_start) {
+            current_point--;
+        } else {
+            current_point++;
+        }
+        
 
-        dds_sleepfor(DDS_SECS(1));
+        //if (current_point + 1 >= NUM_WAYPOINTS || current_point == 0) {
+        //    printf("Reached end of path, resting...\n");
+        //    dds_sleepfor(DDS_SECS(30));
+        //}
+
+
+        dds_sleepfor(DDS_SECS(2));
     }
 
     printf("Cleaning up DDS entities...\n");
+    free(waypoints);  // Free memory allocated for waypoints
     dds_delete(participant);
     return 0;
 }

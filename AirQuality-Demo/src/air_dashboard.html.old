@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bangkok AQI Monitor</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-heat@0.2.0/dist/leaflet-heat.js"></script>
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial; }
+        .grid {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+            height: calc(100vh - 40px);
+        }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #map {
+            height: 100%;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .legend {
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .legend-item {
+            margin: 5px 0;
+            display: flex;
+            align-items: center;
+        }
+        .color-box {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="grid">
+        <div class="controls">
+            <h2>Bangkok AQI Monitor</h2>
+            <div class="legend">
+                <h3>AQI Levels</h3>
+                <div class="legend-item">
+                    <div class="color-box" style="background: #00e400"></div>
+                    Good (0-50)
+                </div>
+                <div class="legend-item">
+                    <div class="color-box" style="background: #ffff00"></div>
+                    Moderate (51-100)
+                </div>
+                <div class="legend-item">
+                    <div class="color-box" style="background: #ff7e00"></div>
+                    Unhealthy for Sensitive Groups (101-150)
+                </div>
+                <div class="legend-item">
+                    <div class="color-box" style="background: #ff0000"></div>
+                    Unhealthy (151-200)
+                </div>
+                <div class="legend-item">
+                    <div class="color-box" style="background: #8f3f97"></div>
+                    Very Unhealthy (201-300)
+                </div>
+                <div class="legend-item">
+                    <div class="color-box" style="background: #7e0023"></div>
+                    Hazardous (301+)
+                </div>
+            </div>
+            <div id="districtList"></div>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <script>
+        let map;
+        let heatLayer;
+        const districts = new Map();
+
+        function initMap() {
+            map = L.map('map').setView([13.7563, 100.5018], 10);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            heatLayer = L.heatLayer([], {
+                radius: 25,
+                blur: 15,
+                maxZoom: 10,
+                gradient: {
+                    0.0: '#00e400',
+                    0.2: '#ffff00',
+                    0.4: '#ff7e00',
+                    0.6: '#ff0000',
+                    0.8: '#8f3f97',
+                    1.0: '#7e0023'
+                }
+            }).addTo(map);
+        }
+
+        function updateHeatmap() {
+            const points = Array.from(districts.values()).map(data => {
+                return [
+                    data.latitude,
+                    data.longitude,
+                    Math.min(1, data.aqi / 300)  // Normalize intensity
+                ];
+            });
+            heatLayer.setLatLngs(points);
+        }
+
+        function updateDistricts(data) {
+            districts.set(data.district_id, data);
+            updateHeatmap();
+            
+            const list = document.getElementById('districtList');
+            list.innerHTML = Array.from(districts.values())
+                .sort((a, b) => b.aqi - a.aqi)
+                .map(d => `
+                    <div class="district-item">
+                        <strong>${d.name}</strong><br>
+                        AQI: ${d.aqi.toFixed(1)} (${d.level})<br>
+                        PM2.5: ${d.pm25.toFixed(1)} μg/m³
+                    </div>
+                `).join('');
+        }
+
+        const ws = new WebSocket('ws://localhost:8082');
+        
+        ws.onopen = () => {
+            console.log('Connected to server');
+            initMap();
+        };
+        
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                updateDistricts(data);
+            } catch (e) {
+                console.error('Error:', e);
+            }
+        };
+    </script>
+</body>
+</html>

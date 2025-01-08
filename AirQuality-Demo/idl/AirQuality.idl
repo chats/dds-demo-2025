@@ -1,0 +1,15 @@
+module AirQuality {
+    @final
+    struct AQIData {
+        @key
+        string<128> district_id;     // District/Area identifier
+        string<64> name;           // District name in English
+        double latitude;       // District center coordinate
+        double longitude;
+        float pm25;           // PM2.5 value (μg/m³)
+        float pm10;           // PM10 value (μg/m³)
+        float aqi;            // Air Quality Index
+        string<32> level;         // Good/Moderate/Unhealthy/...
+        long timestamp;       // Unix timestamp
+    };
+};

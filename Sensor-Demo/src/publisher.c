@@ -8,11 +8,12 @@
 
 #include "config.h"
 
+/*
 typedef struct {
     char id[DEVICE_ID_LEN];
     double current_temp;
 } Sensor;
-
+*/
 static dds_domainid_t domain_id = DOMAIN_ID;
 static const char *topic_name = TOPIC_NAME;
 
@@ -23,7 +24,7 @@ static const double HUMIDITY_FACTOR = 0.7;
 static bool verbose = false;
 static dds_entity_t participant, topic, writer;
 static dds_return_t rc;
-static SensorData_Reading msg = {0};
+static Sensor msg = {0};
 
 static volatile bool running = true;
 
@@ -73,9 +74,9 @@ void config(int argc, char *argv[]) {
                 break;            
             case 's': 
                 if (++i < argc && sensor_count < MAX_SENSORS) {
-                    strncpy(sensors[sensor_count].id, argv[i], DEVICE_ID_LEN-1);
-                    sensors[sensor_count].id[DEVICE_ID_LEN-1] = '\0';
-                    sensors[sensor_count++].current_temp = 25.0;
+                    strncpy(sensors[sensor_count].device_id, argv[i], DEVICE_ID_LEN-1);
+                    sensors[sensor_count].device_id[DEVICE_ID_LEN-1] = '\0';
+                    //sensors[sensor_count++].temperature = 25.0;
                 }
                 break;
         }
@@ -84,20 +85,29 @@ void config(int argc, char *argv[]) {
 
 int setup() {
     if (!sensor_count) {
-        strcpy(sensors[0].id, "sensor-001");
-        sensors[0].current_temp = 25.0;
+        strcpy(sensors[0].device_id, "sensor-001");
+        sensors[0].temperature = 25.0;
         sensor_count = 1;
     }
 
     srand(time(NULL));
 
+    // Create and configure QoS
+    dds_qos_t *qos = dds_create_qos();
+    dds_qset_reliability(qos, DDS_RELIABILITY_RELIABLE, DDS_SECS(1));
+    dds_qset_durability(qos, DDS_DURABILITY_TRANSIENT_LOCAL);
+    dds_qset_history(qos, DDS_HISTORY_KEEP_LAST, 1);
+
+    // Create DDS entities with QoS
     if ((participant = dds_create_participant(domain_id, NULL, NULL)) < 0 ||
-        (topic = dds_create_topic(participant, &SensorData_Reading_desc, topic_name, NULL, NULL)) < 0 ||
-        (writer = dds_create_writer(participant, topic, NULL, NULL)) < 0) {
+        (topic = dds_create_topic(participant, &Sensor_desc, topic_name, qos, NULL)) < 0 ||
+        (writer = dds_create_writer(participant, topic, qos, NULL)) < 0) {
         fprintf(stderr, "Error initializing DDS: %s\n", dds_strretcode(-writer));
+        dds_delete_qos(qos);
         return 1;
     }
 
+    dds_delete_qos(qos);
     return 0;
 }
 
@@ -113,19 +123,24 @@ int main(int argc, char *argv[]) {
 
     printf("Publisher running, Domain: %d, Topic=%s, press Ctrl-C to stop...\n", domain_id, topic_name);
 
+    dds_publication_matched_status_t status;
     while (running) {
-        for (size_t i = 0; i < sensor_count; i++) {
-            sensors[i].current_temp = get_next_temperature(sensors[i].current_temp);
-            msg.device_id = sensors[i].id;
-            msg.temperature = sensors[i].current_temp;
-            msg.humidity = calculate_humidity(sensors[i].current_temp);
-            msg.timestamp = time(NULL);
+        if (dds_get_publication_matched_status(writer, &status) == DDS_RETCODE_OK) {
+            if (status.current_count > 0) {
+                for (size_t i = 0; i < sensor_count; i++) {
+                    sensors[i].temperature = get_next_temperature(sensors[i].temperature);
+                    strcpy(msg.device_id, sensors[i].device_id);
+                    msg.temperature = sensors[i].temperature;
+                    msg.humidity = calculate_humidity(sensors[i].temperature);
+                    msg.timestamp = time(NULL);
 
-            if ((rc = dds_write(writer, &msg)) != DDS_RETCODE_OK) {
-                fprintf(stderr, "Error: %s\n", dds_strretcode(-rc));
-            } else if (verbose) {
-                printf("Published: %s, T=%.1f, H=%.1f\n",
-                       msg.device_id, msg.temperature, msg.humidity);
+                    if ((rc = dds_write(writer, &msg)) != DDS_RETCODE_OK) {
+                        fprintf(stderr, "Error: %s\n", dds_strretcode(-rc));
+                    } else if (verbose) {
+                        printf("Published: %s, T=%.1f, H=%.1f\n",
+                            msg.device_id, msg.temperature, msg.humidity);
+                    }
+                }
             }
         }
         dds_sleepfor(DDS_SECS(1));

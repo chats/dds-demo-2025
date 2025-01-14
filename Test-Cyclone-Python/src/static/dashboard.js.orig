@@ -1,0 +1,258 @@
+// Dashboard state
+const state = {
+    devices: {},         // Store data for charts
+    stats: {},          // Store statistics
+    latestData: {},     // Store latest values
+    lastValues: {},     // Store previous values for trend
+    charts: {},         // Store Chart.js instances
+    isConnected: false  // WebSocket connection status
+};
+
+const MAX_DATA_POINTS = 30;
+
+// Update connection status UI
+function updateConnectionStatus(connected) {
+    const indicator = document.getElementById('connectionStatus');
+    const text = document.getElementById('connectionText');
+    
+    state.isConnected = connected;
+    indicator.className = `status-indicator status-${connected ? 'active' : 'inactive'}`;
+    text.textContent = connected ? 'Connected' : 'Disconnected';
+}
+
+// Create or update sensor card
+function updateSensorCard(deviceId, data) {
+    let card = document.getElementById(`card-${deviceId}`);
+    const cardsContainer = document.getElementById('sensorCards');
+
+    if (!card) {
+        card = document.createElement('div');
+        card.id = `card-${deviceId}`;
+        card.className = 'sensor-card bg-white rounded-lg p-4 shadow-md';
+        cardsContainer.appendChild(card);
+    }
+
+    // Get value trends
+    const tempTrend = getValueTrend(deviceId, 'temperature', data.temperature);
+    const humidTrend = getValueTrend(deviceId, 'humidity', data.humidity);
+
+    card.innerHTML = `
+        <div class="flex items-center justify-between mb-2">
+            <h2 class="text-lg font-semibold">Device: ${deviceId}</h2>
+        </div>
+        <div class="space-y-2">
+            <div class="bg-purple-50 px-3 py-2 rounded">
+                Temperature: 
+                <span class="${tempTrend}">${data.temperature.toFixed(1)}°C</span>
+            </div>
+            <div class="bg-green-50 px-3 py-2 rounded">
+                Humidity: 
+                <span class="${humidTrend}">${data.humidity.toFixed(1)}%</span>
+            </div>
+            <p class="text-sm text-gray-500">
+                Last Update: ${new Date(data.timestamp * 1000).toLocaleTimeString()}
+            </p>
+        </div>
+    `;
+}
+
+// Create or update chart
+function updateChart(deviceId, data) {
+    const containerId = `chart-${deviceId}`;
+    const chartId = `chart-canvas-${deviceId}`;
+    let container = document.getElementById(containerId);
+    const chartsContainer = document.getElementById('chartContainers');
+
+    if (!container) {
+        container = document.createElement('div');
+        container.id = containerId;
+        container.className = 'bg-white p-4 rounded-lg shadow';
+        container.innerHTML = `
+            <h2 class="text-lg font-semibold mb-4">Device ${deviceId} History</h2>
+            <canvas id="${chartId}"></canvas>
+        `;
+        chartsContainer.appendChild(container);
+
+        // Initialize new chart
+        const ctx = document.getElementById(chartId).getContext('2d');
+        state.charts[deviceId] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Temperature (°C)',
+                        data: [],
+                        borderColor: '#8884d8',
+                        yAxisID: 'temperature'
+                    },
+                    {
+                        label: 'Humidity (%)',
+                        data: [],
+                        borderColor: '#82ca9d',
+                        yAxisID: 'humidity'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                scales: {
+                    temperature: {
+                        type: 'linear',
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Temperature (°C)'
+                        }
+                    },
+                    humidity: {
+                        type: 'linear',
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Humidity (%)'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Update chart data
+    const chart = state.charts[deviceId];
+    chart.data.labels.push(new Date(data.timestamp * 1000).toLocaleTimeString());
+    chart.data.datasets[0].data.push(data.temperature);
+    chart.data.datasets[1].data.push(data.humidity);
+
+    // Keep only last N points
+    if (chart.data.labels.length > MAX_DATA_POINTS) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+        chart.data.datasets[1].data.shift();
+    }
+
+    chart.update();
+}
+
+// Update statistics
+function updateStats(deviceId, data) {
+    if (!state.stats[deviceId]) {
+        state.stats[deviceId] = {
+            temp_min: data.temperature,
+            temp_max: data.temperature,
+            temp_sum: 0,
+            humid_min: data.humidity,
+            humid_max: data.humidity,
+            humid_sum: 0,
+            count: 0
+        };
+    }
+
+    const stats = state.stats[deviceId];
+    stats.temp_min = Math.min(stats.temp_min, data.temperature);
+    stats.temp_max = Math.max(stats.temp_max, data.temperature);
+    stats.temp_sum += data.temperature;
+    stats.humid_min = Math.min(stats.humid_min, data.humidity);
+    stats.humid_max = Math.max(stats.humid_max, data.humidity);
+    stats.humid_sum += data.humidity;
+    stats.count++;
+
+    updateStatsUI(deviceId, stats);
+}
+
+// Update statistics UI
+function updateStatsUI(deviceId, stats) {
+    let statsCard = document.getElementById(`stats-${deviceId}`);
+    const statsContainer = document.getElementById('statsGrid');
+
+    if (!statsCard) {
+        statsCard = document.createElement('div');
+        statsCard.id = `stats-${deviceId}`;
+        statsCard.className = 'bg-white p-4 rounded-lg shadow';
+        statsContainer.appendChild(statsCard);
+    }
+
+    const tempAvg = stats.temp_sum / stats.count;
+    const humidAvg = stats.humid_sum / stats.count;
+
+    statsCard.innerHTML = `
+        <h2 class="text-lg font-semibold mb-4">Device ${deviceId} Statistics</h2>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <h3 class="font-medium text-purple-600">Temperature</h3>
+                <p>Min: ${stats.temp_min.toFixed(1)}°C</p>
+                <p>Max: ${stats.temp_max.toFixed(1)}°C</p>
+                <p>Average: ${tempAvg.toFixed(1)}°C</p>
+            </div>
+            <div>
+                <h3 class="font-medium text-green-600">Humidity</h3>
+                <p>Min: ${stats.humid_min.toFixed(1)}%</p>
+                <p>Max: ${stats.humid_max.toFixed(1)}%</p>
+                <p>Average: ${humidAvg.toFixed(1)}%</p>
+            </div>
+        </div>
+    `;
+}
+
+// Get value trend (up/down/none)
+function getValueTrend(deviceId, field, currentValue) {
+    const lastData = state.lastValues[deviceId];
+    if (!lastData) return '';
+    
+    const lastValue = lastData[field];
+    if (currentValue > lastValue) return 'value-up';
+    if (currentValue < lastValue) return 'value-down';
+    return '';
+}
+
+// Process new data
+function processData(data) {
+    const { device_id, temperature, humidity, timestamp } = data;
+
+    // Update latest and last values
+    state.lastValues[device_id] = state.latestData[device_id];
+    state.latestData[device_id] = { temperature, humidity, timestamp };
+
+    // Update UI components
+    updateSensorCard(device_id, data);
+    updateChart(device_id, data);
+    updateStats(device_id, data);
+}
+
+// Setup WebSocket connection
+function connectWebSocket() {
+    const wsUrl = `ws://${window.location.host}/ws`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+        console.log('WebSocket Connected');
+        updateConnectionStatus(true);
+    };
+
+    ws.onclose = () => {
+        console.log('WebSocket Disconnected');
+        updateConnectionStatus(false);
+        // Try to reconnect after 5 seconds
+        setTimeout(connectWebSocket, 5000);
+    };
+
+    ws.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            processData(data);
+        } catch (error) {
+            console.error('Error processing data:', error);
+        }
+    };
+
+    ws.onerror = (error) => {
+        console.error('WebSocket Error:', error);
+    };
+}
+
+// Start the dashboard
+connectWebSocket();

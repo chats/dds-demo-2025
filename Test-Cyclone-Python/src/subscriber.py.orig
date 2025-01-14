@@ -1,0 +1,77 @@
+import time
+import argparse
+from cyclonedds.domain import DomainParticipant
+from cyclonedds.sub import Subscriber, DataReader
+from cyclonedds.topic import Topic
+from config import (
+    DDS_DOMAIN_ID,
+    TOPIC_NAME,
+    SensorData,
+    create_reliable_qos
+)
+
+class SensorSubscriber:
+    def __init__(self, device_filter: str = None):
+        self.device_filter = device_filter
+        self.dp = DomainParticipant(DDS_DOMAIN_ID)
+        self.sub = Subscriber(self.dp)
+        self.topic = Topic(self.dp, TOPIC_NAME, SensorData)
+        self.reader = DataReader(self.sub, self.topic, qos=create_reliable_qos())
+
+    def data_callback(self, data):
+        # ถ้ามีการกำหนด filter และ device_id ไม่ตรงกับ filter ให้ข้าม
+        if self.device_filter and data.device_id != self.device_filter:
+            return
+            
+        print(f"Received: Device ID: {data.device_id}")
+        print(f"Temperature: {data.temperature}°C")
+        print(f"Humidity: {data.humidity}%")
+        print(f"Timestamp: {data.timestamp}")
+        print("---")
+
+    def cleanup(self):
+        if hasattr(self, 'reader'):
+            del self.reader
+        if hasattr(self, 'topic'):
+            del self.topic
+        if hasattr(self, 'sub'):
+            del self.sub
+        if hasattr(self, 'dp'):
+            del self.dp
+
+    def start_listening(self):
+        if self.device_filter:
+            print(f"Subscriber waiting for data from device: {self.device_filter}")
+        else:
+            print("Subscriber waiting for data from all devices...")
+            
+        try:
+            while True:
+                samples = self.reader.take()
+                for data in samples:
+                    self.data_callback(data)
+                time.sleep(0.1)
+        except KeyboardInterrupt:
+            print("\nStopping subscriber...")
+        finally:
+            self.cleanup()
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='DDS Sensor Data Subscriber')
+    parser.add_argument('-i', '--id',
+                       help='Filter by Device ID (optional)')
+    return parser.parse_args()
+
+def main():
+    args = parse_arguments()
+    subscriber = SensorSubscriber(device_filter=args.id)
+    
+    try:
+        subscriber.start_listening()
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        subscriber.cleanup()
+
+if __name__ == "__main__":
+    main()

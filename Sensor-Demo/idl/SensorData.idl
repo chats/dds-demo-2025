@@ -1,9 +1,7 @@
-module SensorData {
-    struct Reading {
-        @key
-        string device_id;
-        double temperature;
-        double humidity;
-        long timestamp;
-    };
+struct Sensor {
+    @key
+    string<32> device_id;
+    double temperature;
+    double humidity;
+    long timestamp;
 };

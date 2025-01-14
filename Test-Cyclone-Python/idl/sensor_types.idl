@@ -1,0 +1,10 @@
+module SensorTypes {
+    @final
+    struct SensorData {
+        @key
+        string device_id;
+        double temperature;
+        double humidity;
+        long timestamp;
+    };
+};

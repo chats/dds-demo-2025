@@ -28,11 +28,12 @@ python -m pip install git+https://github.com/eclipse-cyclonedds/cyclonedds-pytho
 1. Create your idl
 2. Generate data type from idl
 ```
-idlc -l py file.idl
+mkdir generated
+idlc -l py idl/SensorTypes.idl -d generated
 ```
 3. Run publisher or subscriber
 ```
 source ~/.venv/myenv/bin/activate
-python pubisher.py
-python suscriber.py
+python src/pubisher.py
+python src/suscriber.py
 ```

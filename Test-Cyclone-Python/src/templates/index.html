@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sensor Data Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Add date picker -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <style>
+        .sensor-card { transition: all 0.3s ease; }
+        .sensor-card:hover { transform: translateY(-2px); }
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+        .status-active { background-color: #10B981; }
+        .status-inactive { background-color: #6B7280; }
+        .value-up { color: #10B981; }
+        .value-down { color: #EF4444; }
+        .alert {
+            background-color: #FEF2F2;
+            border-left: 4px solid #EF4444;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            border-radius: 0.25rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-bold">Sensor Data Dashboard</h1>
+            <div class="flex items-center">
+                <span id="connectionStatus" class="status-indicator status-inactive"></span>
+                <span id="connectionText" class="text-sm text-gray-600">Disconnected</span>
+            </div>
+        </div>
+
+        <!-- Time Filter -->
+        <div class="bg-white p-4 rounded-lg shadow mb-6">
+            <h2 class="text-lg font-semibold mb-2">Time Filter</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Start Time</label>
+                    <input type="text" id="startTime" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">End Time</label>
+                    <input type="text" id="endTime" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+            </div>
+        </div>
+
+        <!-- Alerts Container -->
+        <div id="alertsContainer" class="mb-6"></div>
+
+        <!-- Sensor Cards Grid -->
+        <div id="sensorCards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6"></div>
+
+        <!-- Charts Grid -->
+        <div id="chartContainers" class="space-y-6 mb-6"></div>
+
+        <!-- Statistics Grid -->
+        <div id="statsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+    </div>
+
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>

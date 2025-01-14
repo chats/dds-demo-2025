@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:noNamespaceSchemaLocation="file:////Applications/rti_connext_dds-7.3.0/resource/schema/rti_dds_qos_profiles.xsd">
+    <qos_library name="SensorData_Library">
+        <!-- ใช้เพียง profile เดียว -->
+        <qos_profile name="SensorData_Profile" is_default_qos="true">
+            <domain_participant_qos>
+                <participant_name>
+                    <name>SensorDataParticipant</name>
+                    <role_name>SensorDataParticipantRole</role_name>
+                </participant_name>
+                <!-- Transport Settings -->
+                <transport_builtin>
+                    <mask>UDPv4</mask>
+                </transport_builtin>
+                <!-- Discovery Config -->
+                <discovery>
+                    <initial_peers>
+                        <element>udpv4://239.255.0.1</element>
+                    </initial_peers>
+                </discovery>
+            </domain_participant_qos>
+
+            <datawriter_qos>
+                <reliability>
+                    <kind>RELIABLE_RELIABILITY_QOS</kind>
+                </reliability>
+                <durability>
+                    <kind>TRANSIENT_LOCAL_DURABILITY_QOS</kind>
+                </durability>
+                <history>
+                    <kind>KEEP_LAST_HISTORY_QOS</kind>
+                    <depth>1</depth>
+                </history>
+            </datawriter_qos>
+
+            <datareader_qos>
+                <reliability>
+                    <kind>RELIABLE_RELIABILITY_QOS</kind>
+                </reliability>
+                <durability>
+                    <kind>TRANSIENT_LOCAL_DURABILITY_QOS</kind>
+                </durability>
+                <history>
+                    <kind>KEEP_LAST_HISTORY_QOS</kind>
+                    <depth>1</depth>
+                </history>
+            </datareader_qos>
+        </qos_profile>
+    </qos_library>
+</dds>

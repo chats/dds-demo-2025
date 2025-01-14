@@ -8,7 +8,7 @@
 
 static dds_entity_t participant, topic, reader;
 static dds_return_t rc;
-static SensorData_Reading *msg;
+static Sensor *msg;
 static void *samples[MAX_SAMPLES] = {NULL};
 static dds_sample_info_t infos[MAX_SAMPLES];
 static char filter_device_id[DEVICE_ID_LEN] = {0};
@@ -62,21 +62,29 @@ void config(int argc, char *argv[]) {
 }
 
 int setup() {
+    // Create and configure QoS
+    dds_qos_t *qos = dds_create_qos();
+    dds_qset_reliability(qos, DDS_RELIABILITY_RELIABLE, DDS_SECS(1));
+    dds_qset_durability(qos, DDS_DURABILITY_TRANSIENT_LOCAL);
+    dds_qset_history(qos, DDS_HISTORY_KEEP_LAST, 1);
+
+    // Create DDS entities with QoS
     if ((participant = dds_create_participant(domain_id, NULL, NULL)) < 0 ||
-        (topic = dds_create_topic(participant, &SensorData_Reading_desc, topic_name, NULL, NULL)) < 0 ||
-        (reader = dds_create_reader(participant, topic, NULL, NULL)) < 0) {
+        (topic = dds_create_topic(participant, &Sensor_desc, topic_name, qos, NULL)) < 0 ||
+        (reader = dds_create_reader(participant, topic, qos, NULL)) < 0) {
         fprintf(stderr, "Error initializing DDS: %s\n", dds_strretcode(-reader));
+        dds_delete_qos(qos);
         return 1;
     }
 
-    samples[0] = SensorData_Reading__alloc();
+    dds_delete_qos(qos);
+    samples[0] = Sensor__alloc();
 
     if (filtering) {
         printf("Filtering for device: %s\n", filter_device_id);
     }
     return 0;
 }
-
 
 int main(int argc, char *argv[]) {
 
@@ -90,20 +98,26 @@ int main(int argc, char *argv[]) {
 
     printf("Subscriber running, Domain: %d, Topic=%s, press Ctrl-C to stop...\n", domain_id, topic_name);
 
+    dds_subscription_matched_status_t status;
+
     while (running) {
-        rc = dds_take(reader, samples, infos, MAX_SAMPLES, MAX_SAMPLES);
-        if (rc > 0 && infos[0].valid_data) {
-            msg = samples[0];
-            if (!filtering || strcmp(msg->device_id, filter_device_id) == 0) {
-                printf("Received: %s, T=%.1f, H=%.1f\n",
-                       msg->device_id, msg->temperature, msg->humidity);
+        if (dds_get_subscription_matched_status(reader, &status) == DDS_RETCODE_OK) {
+            if (status.current_count > 0) {
+                rc = dds_take(reader, samples, infos, MAX_SAMPLES, MAX_SAMPLES);
+                if (rc > 0 && infos[0].valid_data) {
+                    msg = samples[0];
+                    if (!filtering || strcmp(msg->device_id, filter_device_id) == 0) {
+                        printf("Received: %s, T=%.1f, H=%.1f\n",
+                               msg->device_id, msg->temperature, msg->humidity);
+                    }
+                }
             }
         }
         dds_sleepfor(DDS_MSECS(100));
     }
 
     printf("Cleaning up DDS entities...\n");
-    SensorData_Reading_free(samples[0], DDS_FREE_ALL);
+    Sensor_free(samples[0], DDS_FREE_ALL);
     dds_delete(participant);
     
     return 0;

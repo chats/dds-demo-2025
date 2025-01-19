@@ -1,0 +1,7 @@
+cyclonedds
+flask
+flask-wtf
+sqlalchemy
+requests
+pandas
+openpyxl

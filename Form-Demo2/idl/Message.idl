@@ -1,0 +1,11 @@
+module MessageModule {
+    @final
+    struct Message {
+        @key
+        string<100> subject;
+        @key
+        string<100> recipient;
+        string<255> fileUrl;
+        long timestamp;
+    };
+};

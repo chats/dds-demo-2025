@@ -18,7 +18,7 @@ const MAX_DATA_POINTS = 20;
 const THRESHOLDS = {
     temperature: {
         min: 20,
-        max: 28,
+        max: 30,
         unit: '°C'
     },
     humidity: {

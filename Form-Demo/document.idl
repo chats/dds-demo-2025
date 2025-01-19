@@ -1,0 +1,9 @@
+module DocumentModule {
+    @final
+    struct Document {
+        @key
+        string<255> recipient;
+        string<255> subject;
+        string<255> url;
+    };
+};

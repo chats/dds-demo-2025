@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DDS Messages</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .filter { 
+            margin-bottom: 20px; 
+        }
+        .filter input {
+            padding: 8px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .filter button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .message-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #fff;
+        }
+        .message-header {
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+        .message-meta {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+        .excel-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .excel-table th, .excel-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .excel-table th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }
+        .excel-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .new-message {
+            animation: highlight 2s;
+        }
+        @keyframes highlight {
+            0% { background-color: #fffacd; }
+            100% { background-color: #fff; }
+        }
+    </style>
+</head>
+<body>
+    <h2>DDS Messages</h2>
+    
+    <div class="filter">
+        <form method="GET">
+            <label>Filter by Recipient:</label>
+            <input type="text" name="recipient" value="{{ request.args.get('recipient', '') }}">
+            <button type="submit">Filter</button>
+        </form>
+    </div>
+
+    <div id="messageContainer">
+        {% for message in messages %}
+        <div class="message-card">
+            <div class="message-header">
+                <h3>{{ message.subject }}</h3>
+                <div class="message-meta">
+                    Recipient: {{ message.recipient }}<br>
+                    Time: {{ message.timestamp }}
+                </div>
+            </div>
+            {% if message.excel_data %}
+            <div class="excel-data">
+                <table class="excel-table">
+                    <thead>
+                        <tr>
+                            {% for header in message.excel_data.headers %}
+                            <th>{{ header }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in message.excel_data.rows %}
+                        <tr>
+                            {% for cell in row %}
+                            <td>{{ cell }}</td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <script>
+        const evtSource = new EventSource("/stream");
+        const messageContainer = document.getElementById('messageContainer');
+
+        function createMessageCard(message) {
+            const card = document.createElement('div');
+            card.className = 'message-card new-message';
+
+            let excelTable = '';
+            if (message.excel_data) {
+                let headers = message.excel_data.headers.map(h => `<th>${h}</th>`).join('');
+                let rows = message.excel_data.rows.map(row => 
+                    `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`
+                ).join('');
+                
+                excelTable = `
+                    <div class="excel-data">
+                        <table class="excel-table">
+                            <thead><tr>${headers}</tr></thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            card.innerHTML = `
+                <div class="message-header">
+                    <h3>${message.subject}</h3>
+                    <div class="message-meta">
+                        Recipient: ${message.recipient}<br>
+                        Time: ${message.timestamp}
+                    </div>
+                </div>
+                ${excelTable}
+            `;
+
+            return card;
+        }
+
+        evtSource.onmessage = function(event) {
+            const message = JSON.parse(event.data);
+            const recipientFilter = new URLSearchParams(window.location.search).get('recipient');
+            
+            if (!recipientFilter || message.recipient === recipientFilter) {
+                const card = createMessageCard(message);
+                messageContainer.insertBefore(card, messageContainer.firstChild);
+            }
+        };
+
+        evtSource.onerror = function(err) {
+            console.error("EventSource failed:", err);
+        };
+    </script>
+</body>
+</html>

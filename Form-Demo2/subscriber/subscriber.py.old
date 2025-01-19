@@ -1,0 +1,69 @@
+from cyclonedds.domain import DomainParticipant
+from cyclonedds.sub import Subscriber, DataReader
+from cyclonedds.topic import Topic
+from cyclonedds.idl import IdlStruct
+from dataclasses import dataclass
+from database import Session, MessageModel
+from datetime import datetime
+import time
+
+@dataclass
+class Message(IdlStruct):
+    subject: str
+    recipient: str
+    fileUrl: str
+    timestamp: int
+
+class DDSSubscriber:
+    def __init__(self, recipient_filter=None):
+        self.participant = DomainParticipant()
+        self.subscriber = Subscriber(self.participant)
+        self.topic = Topic(self.participant, "Message", Message)
+        self.reader = DataReader(self.subscriber, self.topic)
+        self.recipient_filter = recipient_filter
+        self.session = Session()
+
+    def receive_messages(self, message_queue):
+        while True:
+            try:
+                samples = self.reader.take()
+                for sample in samples:
+                    try:
+                        if isinstance(sample, Message):
+                            if self.recipient_filter is None or sample.recipient == self.recipient_filter:
+                                saved_message = self.save_to_db(sample)
+                                if saved_message:
+                                    message_queue.put(saved_message)
+                    except Exception as e:
+                        print(f"Error processing sample: {e}")
+                time.sleep(0.1)
+            except Exception as e:
+                print(f"Error taking samples: {e}")
+                time.sleep(1)
+
+    def save_to_db(self, message):
+        try:
+            db_message = MessageModel(
+                subject=message.subject,
+                recipient=message.recipient,
+                fileUrl=message.fileUrl,
+                timestamp=datetime.fromtimestamp(message.timestamp)
+            )
+            self.session.add(db_message)
+            self.session.commit()
+            print(f"Saved message: {message.subject} for {message.recipient}")
+            return db_message
+        except Exception as e:
+            print(f"Error saving to database: {e}")
+            self.session.rollback()
+            return None
+
+    def get_messages(self, recipient=None):
+        try:
+            query = self.session.query(MessageModel)
+            if recipient:
+                query = query.filter(MessageModel.recipient == recipient)
+            return query.all()
+        except Exception as e:
+            print(f"Error querying database: {e}")
+            return []

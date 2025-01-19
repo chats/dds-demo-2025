@@ -8,7 +8,7 @@
 
 static dds_entity_t participant, topic, reader;
 static dds_return_t rc;
-static Sensor *msg;
+static SensorData *msg;
 static void *samples[MAX_SAMPLES] = {NULL};
 static dds_sample_info_t infos[MAX_SAMPLES];
 static char filter_device_id[DEVICE_ID_LEN] = {0};
@@ -70,7 +70,7 @@ int setup() {
 
     // Create DDS entities with QoS
     if ((participant = dds_create_participant(domain_id, NULL, NULL)) < 0 ||
-        (topic = dds_create_topic(participant, &Sensor_desc, topic_name, qos, NULL)) < 0 ||
+        (topic = dds_create_topic(participant, &SensorData_desc, topic_name, qos, NULL)) < 0 ||
         (reader = dds_create_reader(participant, topic, qos, NULL)) < 0) {
         fprintf(stderr, "Error initializing DDS: %s\n", dds_strretcode(-reader));
         dds_delete_qos(qos);
@@ -78,7 +78,7 @@ int setup() {
     }
 
     dds_delete_qos(qos);
-    samples[0] = Sensor__alloc();
+    samples[0] = SensorData__alloc();
 
     if (filtering) {
         printf("Filtering for device: %s\n", filter_device_id);
@@ -117,7 +117,7 @@ int main(int argc, char *argv[]) {
     }
 
     printf("Cleaning up DDS entities...\n");
-    Sensor_free(samples[0], DDS_FREE_ALL);
+    SensorData_free(samples[0], DDS_FREE_ALL);
     dds_delete(participant);
     
     return 0;

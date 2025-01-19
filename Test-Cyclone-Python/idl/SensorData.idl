@@ -1,4 +1,4 @@
-@finale
+@final
 struct SensorData {
     @key
     string<32> device_id;

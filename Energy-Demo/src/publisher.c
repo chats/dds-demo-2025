@@ -130,7 +130,7 @@ int main(int argc, char *argv[]) {
             }
         }
         
-        dds_sleepfor(DDS_SECS(60));
+        dds_sleepfor(DDS_SECS(10));
     }
 
     printf("Cleaning up...\n");

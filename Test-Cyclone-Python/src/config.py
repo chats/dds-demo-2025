@@ -1,19 +1,33 @@
 from dataclasses import dataclass
-from cyclonedds.idl import IdlStruct
+from enum import auto
+from typing import TYPE_CHECKING, Optional
+
+#from cyclonedds.idl import IdlStruct
 from cyclonedds.core import Qos, Policy
 from cyclonedds.util import duration
 
+
+import cyclonedds.idl as idl
+import cyclonedds.idl.annotations as annotate
+import cyclonedds.idl.types as types
+
+
 # DDS Configuration
 DDS_DOMAIN_ID = 0
-TOPIC_NAME = "SensorReadings"
+TOPIC_NAME = "SensorData"
 
-# Define data type directly instead of using generated code
+# SensorData IDL
 @dataclass
-class SensorData(IdlStruct):
-    device_id: str
-    temperature: float
-    humidity: float
-    timestamp: int
+@annotate.final
+@annotate.autoid("sequential")
+class SensorData(idl.IdlStruct, typename="SensorData"):
+    device_id: types.bounded_str[32]
+    annotate.key("device_id")
+    temperature: types.float64
+    humidity: types.float64
+    timestamp: types.int32
+
+
 
 # QoS Configurations
 def create_reliable_qos():

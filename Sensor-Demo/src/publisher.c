@@ -17,14 +17,14 @@ typedef struct {
 static dds_domainid_t domain_id = DOMAIN_ID;
 static const char *topic_name = TOPIC_NAME;
 
-static Sensor sensors[MAX_SENSORS];
+static SensorData sensors[MAX_SENSORS];
 static size_t sensor_count = 0;
 static const double HUMIDITY_FACTOR = 0.7;
 
 static bool verbose = false;
 static dds_entity_t participant, topic, writer;
 static dds_return_t rc;
-static Sensor msg = {0};
+static SensorData msg = {0};
 
 static volatile bool running = true;
 
@@ -100,7 +100,7 @@ int setup() {
 
     // Create DDS entities with QoS
     if ((participant = dds_create_participant(domain_id, NULL, NULL)) < 0 ||
-        (topic = dds_create_topic(participant, &Sensor_desc, topic_name, qos, NULL)) < 0 ||
+        (topic = dds_create_topic(participant, &SensorData_desc, topic_name, qos, NULL)) < 0 ||
         (writer = dds_create_writer(participant, topic, qos, NULL)) < 0) {
         fprintf(stderr, "Error initializing DDS: %s\n", dds_strretcode(-writer));
         dds_delete_qos(qos);

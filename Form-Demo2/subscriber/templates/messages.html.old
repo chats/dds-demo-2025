@@ -7,14 +7,11 @@
 <body>
     <h2>DDS Messages</h2>
     
+    {% if current_filter %}
     <div class="current-filter">
-        {% if 'ALL' in current_filters or '*' in current_filters %}
-            Currently showing: <strong>All messages</strong>
-        {% else %}
-            Currently filtering for recipients: 
-            <strong>{{ current_filters|join(', ') }}</strong>
-        {% endif %}
+        Currently filtering by recipient: <strong>{{ current_filter }}</strong>
     </div>
+    {% endif %}
 
     <div id="messageContainer">
         {% for message in messages %}
@@ -53,7 +50,7 @@
     </div>
 
     <script>
-        const currentFilters = {{ current_filters|tojson }};
+        const currentFilter = "{{ current_filter }}";
     </script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>

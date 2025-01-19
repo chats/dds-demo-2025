@@ -11,7 +11,7 @@ from collections import deque
 
 app = Flask(__name__)
 message_queue = queue.Queue()
-messages_cache = deque(maxlen=100)  # เก็บข้อมูล 100 messages ล่าสุดใน memory
+messages_cache = deque(maxlen=100)
 
 def fetch_excel_data(file_url):
     try:
@@ -39,13 +39,16 @@ def format_message(message_data):
 
 @app.route('/')
 def index():
-    global messages_cache
-    recipient_filter = request.args.get('recipient', default_filter)
-    filtered_messages = [msg for msg in messages_cache 
-                        if not recipient_filter or msg['recipient'] == recipient_filter]
+    global messages_cache, filters
+    if 'ALL' in filters or '*' in filters:
+        filtered_messages = list(messages_cache)
+    else:
+        filtered_messages = [msg for msg in messages_cache 
+                           if msg['recipient'] in filters]
+    
     return render_template('messages.html', 
                          messages=filtered_messages, 
-                         current_filter=recipient_filter)
+                         current_filters=filters)
 
 @app.route('/stream')
 def stream():
@@ -64,8 +67,13 @@ def stream():
                 continue
     return Response(event_stream(), mimetype="text/event-stream")
 
-def start_subscriber(filter_value):
-    subscriber = DDSSubscriber(filter_value)
+def parse_filters(filter_str):
+    if not filter_str:
+        return ['*']  # Default to accept all if no filter specified
+    return [f.strip() for f in filter_str.split(',')]
+
+def start_subscriber(filter_values):
+    subscriber = DDSSubscriber(filter_values)
     subscriber.receive_messages(message_queue)
 
 def main():
@@ -73,13 +81,19 @@ def main():
     parser.add_argument('--port', type=int, default=8081,
                        help='Port to run the subscriber web interface (default: 8081)')
     parser.add_argument('--filter', type=str,
-                       help='Filter messages by recipient')
+                       help='Filter messages by recipient(s). Use comma for multiple values. Use "ALL" or "*" for all messages.')
     args = parser.parse_args()
 
-    global default_filter
-    default_filter = args.filter
+    global filters
+    filters = parse_filters(args.filter)
+    
+    # Print startup information
+    if 'ALL' in filters or '*' in filters:
+        print("Starting subscriber: Accepting all messages")
+    else:
+        print(f"Starting subscriber: Filtering messages for recipients: {filters}")
 
-    subscriber_thread = threading.Thread(target=start_subscriber, args=(args.filter,))
+    subscriber_thread = threading.Thread(target=start_subscriber, args=(filters,))
     subscriber_thread.daemon = True
     subscriber_thread.start()
     

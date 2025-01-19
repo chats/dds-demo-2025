@@ -1,53 +1,51 @@
-from flask import Flask, render_template, request, Response, jsonify
+from flask import Flask, render_template, request, Response
 from subscriber import DDSSubscriber
 import threading
 import queue
 import json
-from datetime import datetime
 import argparse
 import requests
 import pandas as pd
 import io
+from collections import deque
 
 app = Flask(__name__)
-subscriber = DDSSubscriber()
 message_queue = queue.Queue()
+messages_cache = deque(maxlen=100)  # เก็บข้อมูล 100 messages ล่าสุดใน memory
 
 def fetch_excel_data(file_url):
     try:
         response = requests.get(file_url)
         if response.status_code == 200:
-            # อ่านไฟล์ Excel จาก content ที่ได้
             df = pd.read_excel(io.BytesIO(response.content))
-            # แปลง DataFrame เป็น dict ที่ใช้แสดงในตาราง
-            data = {
+            return {
                 'headers': df.columns.tolist(),
                 'rows': df.values.tolist()
             }
-            return data
-        else:
-            return None
+        return None
     except Exception as e:
         print(f"Error fetching Excel file: {e}")
         return None
 
-def format_message(message):
-    excel_data = fetch_excel_data(message.fileUrl) if message.fileUrl else None
+def format_message(message_data):
+    excel_data = fetch_excel_data(message_data['fileUrl']) if message_data['fileUrl'] else None
     return {
-        'id': message.id,
-        'subject': message.subject,
-        'recipient': message.recipient,
-        'fileUrl': message.fileUrl,
-        'timestamp': message.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+        'subject': message_data['subject'],
+        'recipient': message_data['recipient'],
+        'fileUrl': message_data['fileUrl'],
+        'timestamp': message_data['timestamp'],
         'excel_data': excel_data
     }
 
 @app.route('/')
 def index():
-    recipient_filter = request.args.get('recipient')
-    messages = subscriber.get_messages(recipient_filter)
-    formatted_messages = [format_message(msg) for msg in messages]
-    return render_template('messages.html', messages=formatted_messages)
+    global messages_cache
+    recipient_filter = request.args.get('recipient', default_filter)
+    filtered_messages = [msg for msg in messages_cache 
+                        if not recipient_filter or msg['recipient'] == recipient_filter]
+    return render_template('messages.html', 
+                         messages=filtered_messages, 
+                         current_filter=recipient_filter)
 
 @app.route('/stream')
 def stream():
@@ -57,6 +55,7 @@ def stream():
                 message = message_queue.get(timeout=1)
                 if message:
                     data = format_message(message)
+                    messages_cache.appendleft(data)
                     yield f"data: {json.dumps(data)}\n\n"
             except queue.Empty:
                 yield ": keepalive\n\n"
@@ -65,16 +64,22 @@ def stream():
                 continue
     return Response(event_stream(), mimetype="text/event-stream")
 
-def start_subscriber():
+def start_subscriber(filter_value):
+    subscriber = DDSSubscriber(filter_value)
     subscriber.receive_messages(message_queue)
 
 def main():
     parser = argparse.ArgumentParser(description='Start the DDS Subscriber')
     parser.add_argument('--port', type=int, default=8081,
                        help='Port to run the subscriber web interface (default: 8081)')
+    parser.add_argument('--filter', type=str,
+                       help='Filter messages by recipient')
     args = parser.parse_args()
 
-    subscriber_thread = threading.Thread(target=start_subscriber)
+    global default_filter
+    default_filter = args.filter
+
+    subscriber_thread = threading.Thread(target=start_subscriber, args=(args.filter,))
     subscriber_thread.daemon = True
     subscriber_thread.start()
     

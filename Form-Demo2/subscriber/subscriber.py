@@ -14,13 +14,17 @@ class Message(IdlStruct):
     timestamp: int
 
 class DDSSubscriber:
-    def __init__(self, recipient_filter=None):
+    def __init__(self, filters=None):
         self.participant = DomainParticipant()
         self.subscriber = Subscriber(self.participant)
         self.topic = Topic(self.participant, "Message", Message)
         self.reader = DataReader(self.subscriber, self.topic)
-        self.recipient_filter = recipient_filter
-        print(f"Subscriber started with filter: {recipient_filter}")
+        self.filters = filters if filters else ['*']
+        
+        if 'ALL' in self.filters or '*' in self.filters:
+            print("Subscriber initialized: Accepting all messages")
+        else:
+            print(f"Subscriber initialized: Filtering for {self.filters}")
 
     def receive_messages(self, message_queue):
         while True:
@@ -29,7 +33,9 @@ class DDSSubscriber:
                 for sample in samples:
                     try:
                         if isinstance(sample, Message):
-                            if not self.recipient_filter or sample.recipient == self.recipient_filter:
+                            # Check if we should accept all messages or if the recipient is in our filter list
+                            if ('ALL' in self.filters or '*' in self.filters or 
+                                sample.recipient in self.filters):
                                 message_data = {
                                     'subject': sample.subject,
                                     'recipient': sample.recipient,

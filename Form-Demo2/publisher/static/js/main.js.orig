@@ -1,8 +1,17 @@
-function showAlert(type, duration = 3000) {
+function showAlert(type, duration = 3000, message = null) {
     const alertElement = document.getElementById(type + 'Alert');
+    if (message) {
+        alertElement.textContent = message;
+    }
     alertElement.style.display = 'block';
     setTimeout(() => {
         alertElement.style.display = 'none';
+        // Reset to default message
+        if (type === 'success') {
+            alertElement.textContent = 'Message published successfully!';
+        } else {
+            alertElement.textContent = 'Failed to publish message. Please try again.';
+        }
     }, duration);
 }
 
@@ -16,6 +25,16 @@ function handleFileSelect() {
 
     if (fileInput.files.length > 0) {
         const file = fileInput.files[0];
+        
+        // Check file extension
+        const extension = file.name.split('.').pop().toLowerCase();
+        if (!['xlsx', 'xls'].includes(extension)) {
+            showAlert('error', 5000, 'Please select an Excel file (.xlsx or .xls)');
+            fileInput.value = '';  // Clear file input
+            preview.style.display = 'none';
+            return;
+        }
+
         fileInfo.textContent = `Selected file: ${file.name} (${formatFileSize(file.size)})`;
         preview.style.display = 'block';
         progress.style.display = 'block';
@@ -34,16 +53,17 @@ function handleFileSelect() {
                 document.getElementById('fileUrl').value = result.fileUrl;
                 progressBar.style.width = '100%';
                 publishButton.disabled = false;
-                showAlert('success');
+                showAlert('success', 3000, 'File uploaded successfully!');
             } else {
                 throw new Error(result.error || 'Upload failed');
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            showAlert('error');
+            showAlert('error', 5000, error.message || 'Failed to upload file');
             preview.style.display = 'none';
             publishButton.disabled = false;
+            fileInput.value = '';  // Clear file input
         });
     }
 }
@@ -64,7 +84,7 @@ function publishMessage() {
     };
 
     if (!data.subject || !data.recipient || !data.fileUrl) {
-        showAlert('error');
+        showAlert('error', 3000, 'Please fill in all fields and upload an Excel file');
         return;
     }
 
@@ -91,6 +111,6 @@ function publishMessage() {
     })
     .catch(error => {
         console.error('Error:', error);
-        showAlert('error');
+        showAlert('error', 5000, error.message || 'Failed to publish message');
     });
 }

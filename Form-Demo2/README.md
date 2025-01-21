@@ -22,10 +22,10 @@ python -m pip install -r requirements.txt
 2. Run publisher
 ```
 cd publisher
-python app.py
+python app.py --port 8080
 ```
 3. Run subscriber
 ```
 cd subscriber
-python app.py
+python app.py --port 8081 [--filter All|<Text>]
 ```

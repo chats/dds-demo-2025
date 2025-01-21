@@ -14,7 +14,7 @@ function showAlert(type, duration = 3000, message = null) {
     }, duration);
 }
 
-async function handleFileSelect() {
+function handleFileSelect() {
     const fileInput = document.getElementById('fileInput');
     const preview = document.getElementById('uploadPreview');
     const fileInfo = preview.querySelector('.file-info');
@@ -25,7 +25,6 @@ async function handleFileSelect() {
     if (fileInput.files.length > 0) {
         const file = fileInput.files[0];
         
-        // Check file extension
         const extension = file.name.split('.').pop().toLowerCase();
         if (!['xlsx', 'xls'].includes(extension)) {
             showAlert('error', 5000, 'Please select an Excel file (.xlsx or .xls)');
@@ -39,41 +38,31 @@ async function handleFileSelect() {
         progress.style.display = 'block';
         publishButton.disabled = true;
 
-        try {
-            const formData = new FormData();
-            formData.append('file', file);
+        const formData = new FormData();
+        formData.append('file', file);
 
-            const response = await fetch('/upload', {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
-            }
-
-            const contentType = response.headers.get("content-type");
-            if (!contentType || !contentType.includes("application/json")) {
-                throw new Error("Invalid response format from server");
-            }
-
-            const result = await response.json();
-
+        fetch('/upload', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(result => {
             if (result.fileUrl) {
                 document.getElementById('fileUrl').value = result.fileUrl;
                 progressBar.style.width = '100%';
                 publishButton.disabled = false;
                 showAlert('success', 3000, 'File uploaded successfully!');
             } else {
-                throw new Error(result.error || 'Upload failed: No file URL received');
+                throw new Error(result.error || 'Upload failed');
             }
-        } catch (error) {
-            console.error('Error during file upload:', error);
-            showAlert('error', 5000, `Upload failed: ${error.message}`);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('error', 5000, error.message || 'Failed to upload file');
             preview.style.display = 'none';
             publishButton.disabled = false;
             fileInput.value = '';
-        }
+        });
     }
 }
 
@@ -85,7 +74,7 @@ function formatFileSize(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-async function publishMessage() {
+function publishMessage() {
     const publishButton = document.getElementById('publishButton');
     publishButton.disabled = true;
     
@@ -101,24 +90,17 @@ async function publishMessage() {
         return;
     }
 
-    try {
-        const response = await fetch('/publish', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
-
-        if (!response.ok) {
-            throw new Error(`Publish failed: ${response.status} ${response.statusText}`);
-        }
-
-        const result = await response.json();
-
+    fetch('/publish', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
         if (result.status === 'success') {
             showAlert('success');
-            // Clear form
             document.getElementById('subject').value = '';
             document.getElementById('recipient').value = '';
             document.getElementById('fileInput').value = '';
@@ -127,10 +109,12 @@ async function publishMessage() {
         } else {
             throw new Error(result.message || 'Failed to publish');
         }
-    } catch (error) {
-        console.error('Error during publish:', error);
-        showAlert('error', 5000, `Publish failed: ${error.message}`);
-    } finally {
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('error', 5000, error.message || 'Failed to publish message');
+    })
+    .finally(() => {
         publishButton.disabled = false;
-    }
+    });
 }

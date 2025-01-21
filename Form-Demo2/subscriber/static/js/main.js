@@ -3,16 +3,26 @@ class MessageHandler {
         this.messageContainer = document.getElementById(containerId);
         this.currentFilters = currentFilters;
         this.setupEventSource();
+        console.log("MessageHandler initialized with filters:", currentFilters);
     }
 
     setupEventSource() {
         const evtSource = new EventSource("/stream");
         
         evtSource.onmessage = (event) => {
-            const message = JSON.parse(event.data);
-            const card = this.createMessageCard(message);
-            if (card) {
-                this.messageContainer.insertBefore(card, this.messageContainer.firstChild);
+            try {
+                console.log("Received message:", event.data);
+                const message = JSON.parse(event.data);
+                console.log("Parsed message:", message);
+                
+                const card = this.createMessageCard(message);
+                if (card) {
+                    console.log("Created card for message:", message.subject);
+                    this.messageContainer.insertBefore(card, this.messageContainer.firstChild);
+                }
+            } catch (error) {
+                console.error("Error processing message:", error);
+                console.error("Message data:", event.data);
             }
         };
 
@@ -28,32 +38,41 @@ class MessageHandler {
     }
 
     createExcelTable(excelData) {
-        if (!excelData) return '';
+        console.log("Creating Excel table with data:", excelData);
+        if (!excelData) {
+            console.log("No Excel data provided");
+            return '';
+        }
         
-        const headers = excelData.headers.map(h => `<th>${this.escapeHtml(h)}</th>`).join('');
-        const rows = excelData.rows.map(row => 
-            `<tr>${row.map(cell => `<td>${this.escapeHtml(cell)}</td>`).join('')}</tr>`
-        ).join('');
+        try {
+            const headers = excelData.headers.map(h => `<th>${this.escapeHtml(h)}</th>`).join('');
+            const rows = excelData.rows.map(row => 
+                `<tr>${row.map(cell => `<td>${this.escapeHtml(cell)}</td>`).join('')}</tr>`
+            ).join('');
 
-        return `
-            <div class="excel-data">
-                <table class="excel-table">
-                    <thead><tr>${headers}</tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            </div>
-        `;
+            console.log("Excel table created successfully");
+            return `
+                <div class="excel-data">
+                    <table class="excel-table">
+                        <thead><tr>${headers}</tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            `;
+        } catch (error) {
+            console.error("Error creating Excel table:", error);
+            return '<div class="error">Error displaying Excel data</div>';
+        }
     }
 
     escapeHtml(unsafe) {
-        return unsafe
-            ? String(unsafe)
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;")
-            : '';
+        if (unsafe === null || unsafe === undefined) return '';
+        return String(unsafe)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     }
 
     createMessageCard(message) {

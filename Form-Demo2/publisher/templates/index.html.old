@@ -17,15 +17,15 @@
 
     <div class="form-group">
         <label>Subject:</label>
-        <input type="text" id="subject" required>
+        <input type="text" id="subject" required placeholder="Enter subject">
     </div>
     <div class="form-group">
         <label>Recipient:</label>
-        <input type="text" id="recipient" required>
+        <input type="text" id="recipient" required placeholder="Enter recipient">
     </div>
     <div class="form-group">
-        <label>File Upload:</label>
-        <input type="file" id="fileInput" onchange="handleFileSelect()">
+        <label>Excel File Upload (.xlsx, .xls):</label>
+        <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFileSelect()">
         <div id="uploadPreview" class="upload-preview">
             <div class="file-info"></div>
             <div class="progress">

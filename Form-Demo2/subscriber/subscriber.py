@@ -34,7 +34,7 @@ class DDSSubscriber:
                     try:
                         if isinstance(sample, Message):
                             # Check if we should accept all messages or if the recipient is in our filter list
-                            if ('ALL' in self.filters or '*' in self.filters or 
+                            if ('ALL' in self.filters or '*' in self.filters or sample.recipient == '*' or sample.recipient == 'ALL' or
                                 sample.recipient in self.filters):
                                 message_data = {
                                     'subject': sample.subject,
